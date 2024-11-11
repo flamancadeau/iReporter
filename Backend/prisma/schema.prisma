@@ -1,0 +1,50 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mongodb"
+  url      = env("DATABASE_URL") // Ensure that DATABASE_URL is set correctly in your .env file
+}
+
+model Users {
+  id            String   @id @default(auto()) @map("_id") @db.ObjectId
+  email         String   @unique
+  password      String
+  name          String
+  isAdmin       Boolean  @default(false)
+  dateOfJoining DateTime @default(now())
+  reports       Report[] // Prisma automatically handles the reverse relation to Report
+}
+
+model Report {
+  id           String       @id @default(auto()) @map("_id") @db.ObjectId
+  type         ReportType // Enum for type (e.g., "RED_FLAG", "INTERVENTION")
+  title        String
+  description  String
+  status       ReportStatus @default(PENDING) // Enum for status (e.g., "PENDING", "RESOLVED")
+  location     Json // JSON object containing latitude and longitude
+  incidentDate DateTime // Field for the incident date
+  image        String? // Optional field for storing image URL or base64 string
+  reportDate   DateTime // Field for the report date
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+  user         Users        @relation(fields: [userId], references: [id]) // Relation to Users model
+  userId       String       @db.ObjectId // Foreign key to Users
+
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+enum ReportType {
+  RED_FLAG
+  INTERVENTION
+}
+
+enum ReportStatus {
+  PENDING
+  UNDER_INVESTIGATION
+  REJECTED
+  RESOLVED
+}
