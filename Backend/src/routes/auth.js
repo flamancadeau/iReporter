@@ -3,8 +3,8 @@ const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken");
 require("dotenv").config();
+// const ReportModel = require("../modals/Report"); // Correct the path if needed
 
- 
 const router = express.Router();
 const prisma = new PrismaClient();
 const saltRounds = 10;
@@ -113,7 +113,7 @@ router.post("/login", async (req, res) => {
       message: "Login successful",
       token,
       user: {
-        userId: user.id,  // Send user ID
+        userId: user.id, // Send user ID
         name: user.name,
         email: user.email, // Send email as well
         isAdmin: user.isAdmin,
@@ -125,66 +125,4 @@ router.post("/login", async (req, res) => {
   }
 });
 
-// Creating Report (with location stored as JSON)
-
-router.post("/report", async (req, res) => {
-  const {
-    type,
-    title,
-    description,
-    status = "PENDING",
-    latitude,
-    longitude,
-    incidentDate,
-    reportDate,
-    userId,
-  } = req.body;
-
-  // Validate required fields
-  if (!latitude || !longitude || !incidentDate || !reportDate) {
-    return res
-      .status(400)
-      .json({
-        error:
-          "Latitude, longitude, incidentDate, and reportDate are required.",
-      });
-  }
-
-  try {
-    const newReport = await prisma.report.create({
-      data: {
-        type,
-        title,
-        description,
-        status,
-        location: { latitude, longitude },
-        incidentDate: new Date(incidentDate), // Parse to Date object
-        reportDate: new Date(reportDate), // Parse to Date object
-        user: {
-          connect: { id: userId },
-        },
-      },
-    });
-
-    res.status(201).json({ message: "Report created", newReport });
-  } catch (error) {
-    console.error("Error creating report:", error);
-    res
-      .status(400)
-      .json({ message: "Failed to create report", error: error.message });
-  }
-});
-router.get("/reports", async (req, res) => {
-  try {
-    const reports = await prisma.report.findMany();
-    res.status(200).json({ reports });
-  } catch (error) {
-    console.error("Error fetching reports:", error);
-    res.status(500).json({ 
-      message: "Error fetching reports", 
-      error: error.message,
-      stack: process.env.NODE_ENV === 'production' ? '🥞' : error.stack
-    });
-  }
-});
 module.exports = router;

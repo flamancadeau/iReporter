@@ -9,7 +9,7 @@ export default function Login() {
   const [success, setSuccess] = useState(""); // State for success message
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-
+  const userId = localStorage.getItem('userId');
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
@@ -41,7 +41,7 @@ export default function Login() {
       if (data.user.isAdmin) {
         navigate("/admin");
       } else {
-        navigate("/ReportCreationPage");
+        navigate(`/ReportCreationPage/${userId}`);
       }
     } catch (error) {
       console.error("Login error:", error);
