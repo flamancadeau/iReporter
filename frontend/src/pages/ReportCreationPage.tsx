@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect } from "react";
 import {
   CircleAlert,
   MapPin,
@@ -8,62 +8,44 @@ import {
   Calendar,
   X,
   Search,
+  HourglassIcon,
 } from "lucide-react";
+import axios from "axios";
 import Button from "./components/Button";
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 
 // Types for Report
 interface Report {
   id: string;
-  type: "red-flag" | "intervention";
-  status: "draft" | "pending" | "under_investigation" | "rejected" | "resolved";
+  type: "RED_FLAG" | "INTERVENTION";
+  status: "draft" | "PENDING" | "UNDER_INVESTIGATION" | "REJECTED" | "RESOLVED";
   title: string;
   description: string;
-  location: string;
-  latitude?: number;
-  longitude?: number;
+  location: {
+    latitude: number;
+    longitude: number;
+  };
   incidentDate: string;
   reportDate: string;
   images: string[];
 }
 
-export default function ReportSystem() {
-  const [reports, setReports] = useState<Report[]>([
-    {
-      id: "1",
-      type: "red-flag",
-      title: "Suspicious activity",
-      status: "pending",
-      description: "Suspicious activity observed in the area",
-      location: "Downtown",
-      incidentDate: new Date().toISOString().split("T")[0],
-      reportDate: new Date().toISOString().split("T")[0],
-      latitude: 40.7128,
-      longitude: -74.006,
-      images: [],
-    },
-    {
-      id: "2",
-      type: "intervention",
-      title: "Road repair needed",
-      status: "pending",
-      description: "Potential safety concern requiring immediate attention",
-      location: "Main Street",
-      incidentDate: new Date(Date.now() - 86400000).toISOString().split("T")[0],
-      reportDate: new Date().toISOString().split("T")[0],
-      latitude: 40.7489,
-      longitude: -73.968,
-      images: [],
-    },
-  ]);
+interface FormData extends Omit<Report, "id" | "status" | "location"> {
+  latitude?: number;
+  longitude?: number;
+}
 
+export default function ReportSystem() {
+  const [loading, setLoading] = useState(false);
+  const [reports, setReports] = useState<Report[]>([]);
   const [editingReport, setEditingReport] = useState<Report | null>(null);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState("manage");
-  const [formData, setFormData] = useState<Omit<Report, "id" | "status">>({
-    type: "red-flag",
+  const [formData, setFormData] = useState<FormData>({
+    type: "RED_FLAG",
     title: "",
     description: "",
-    location: "",
     latitude: undefined,
     longitude: undefined,
     incidentDate: "",
@@ -81,106 +63,136 @@ export default function ReportSystem() {
       year: "numeric",
       month: "long",
       day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
     });
   };
 
+  useEffect(() => {
+    const userId = localStorage.getItem("userId");
+    const fetchReports = async () => {
+      setLoading(true);
+      try {
+        const response = await axios.get<{ reports: Report[] }>(
+          `http://localhost:3000/report/${userId}`
+        );
+        setReports(response.data.reports);
+      } catch (err) {
+        console.error("Error fetching reports:", err);
+        toast.error("Failed to fetch reports. Please try again later.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchReports();
+  }, []);
+
   const canEditReport = (report: Report) => {
-    return report.status === "pending" || report.status === "draft";
+    return report.status === "PENDING" || report.status === "draft";
   };
 
-  const handleDeleteReport = (reportId: string) => {
-    const reportToDelete = reports.find((r) => r.id === reportId);
-    if (reportToDelete && canEditReport(reportToDelete)) {
-      setReports(reports.filter((r) => r.id !== reportId));
-    } else {
-      alert(
-        "This report cannot be deleted as it is no longer in pending or draft status."
-      );
+  const handleDeleteReport = async (id: string) => {
+    try {
+      const response = await axios.delete(`http://localhost:3000/report/${id}`);
+
+      if (response.status === 200) {
+        setReports((prevReports) =>
+          prevReports.filter((report) => report.id !== id)
+        );
+        toast.success("Report deleted successfully");
+      } else {
+        throw new Error("Failed to delete report");
+      }
+    } catch (error) {
+      console.error("Error deleting report:", error);
+      toast.error("Failed to delete report. Please try again.");
     }
   };
 
-  const startEditingReport = (report: Report) => {
-    if (canEditReport(report)) {
-      setEditingReport(report);
-      setFormData({
-        type: report.type,
-        title: report.title,
-        description: report.description,
-        location: report.location,
-        latitude: report.latitude,
-        longitude: report.longitude,
-        incidentDate: report.incidentDate,
-        reportDate: report.reportDate,
-        images: report.images,
-      });
-      setIsEditModalOpen(true);
-    } else {
-      alert(
-        "This report cannot be edited as it is no longer in pending or draft status."
-      );
-    }
-  };
-
-  const updateReport = () => {
+  const handleUpdate = async (event: React.FormEvent) => {
+    event.preventDefault();
     if (!editingReport) return;
 
-    const updatedReports = reports.map((report) =>
-      report.id === editingReport.id ? { ...report, ...formData } : report
-    );
+    try {
+      if (!formData || Object.keys(formData).length === 0) {
+        toast.error("No data to update");
+        return;
+      }
 
-    setReports(updatedReports);
-    setIsEditModalOpen(false);
-    setEditingReport(null);
+      const response = await axios.patch(
+        `http://localhost:3000/report/${editingReport.id}`,
+        formData
+      );
+
+      if (response.status === 200) {
+        setReports(
+          reports.map((report) =>
+            report.id === editingReport.id ? { ...report, ...formData } : report
+          )
+        );
+
+        setIsEditModalOpen(false);
+        setEditingReport(null);
+
+        toast.success("Report updated successfully");
+      } else {
+        throw new Error("Failed to update report");
+      }
+    } catch (error: any) {
+      console.error("Error updating report:", error);
+      const errorMessage =
+        error.response?.data?.message || "Failed to update report";
+      toast.error(errorMessage);
+    }
   };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (editingReport) {
-      updateReport();
+      handleUpdate(e);
     } else {
       try {
-        // Retrieve the userId from localStorage
         const userId = localStorage.getItem("userId");
-
         if (!userId) {
           throw new Error("User is not logged in. User ID not found.");
         }
 
-        // Prepare your form data
         const requestBody = {
           ...formData,
-          userId: userId, // Attach the userId dynamically from localStorage
-        };
-
-        // Sending the POST request with formData and userId
-        const response = await fetch("http://localhost:3000/auth/report", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
+          userId: userId,
+          location: {
+            latitude: formData.latitude,
+            longitude: formData.longitude,
           },
-          body: JSON.stringify(requestBody),
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.message || "Failed to submit the report");
-        }
-
-        const data = await response.json();
-        const newReport: Report = {
-          id: data.newReport.id,
-          status: "pending",
-          ...formData,
         };
-        setReports([...reports, newReport]);
-        resetForm();
+
+        const response = await axios.post(
+          "http://localhost:3000/report",
+          requestBody
+        );
+
+        if (response.status === 201) {
+          const newReport: Report = {
+            id: response.data.newReport.id,
+            status: "PENDING",
+            ...formData,
+            location: {
+              latitude: formData.latitude || 0,
+              longitude: formData.longitude || 0,
+            },
+          };
+          setReports([...reports, newReport]);
+          resetForm();
+          toast.success("Report submitted successfully");
+        } else {
+          throw new Error("Failed to submit the report");
+        }
       } catch (error) {
         console.error("Error creating report:", error);
-        alert("An unexpected error occurred. Please try again.");
+        toast.error("An unexpected error occurred. Please try again.");
       }
     }
   };
+
   const handleInputChange = (
     e: React.ChangeEvent<
       HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement
@@ -203,6 +215,7 @@ export default function ReportSystem() {
             longitude: position.coords.longitude,
           }));
           setIsLoadingLocation(false);
+          toast.success("Location fetched successfully");
         },
         (error) => {
           setLocationError(
@@ -210,21 +223,22 @@ export default function ReportSystem() {
           );
           setIsLoadingLocation(false);
           console.error("Geolocation error:", error);
+          toast.error("Failed to get location. Please try again.");
         },
         { enableHighAccuracy: true }
       );
     } else {
       setLocationError("Geolocation is not supported by your browser");
       setIsLoadingLocation(false);
+      toast.error("Geolocation is not supported by your browser");
     }
   };
 
   const resetForm = () => {
     setFormData({
-      type: "red-flag",
+      type: "RED_FLAG",
       title: "",
       description: "",
-      location: "",
       latitude: undefined,
       longitude: undefined,
       incidentDate: "",
@@ -233,23 +247,36 @@ export default function ReportSystem() {
     });
   };
 
-  const filteredReports = useMemo(() => {
-    return reports.filter(
-      (report) =>
-        report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.location.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.type.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        report.status.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredReports = reports.filter(
+    (report) =>
+      report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.description.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+          <HourglassIcon className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" />
+          <p className="text-lg font-medium text-gray-700">
+            Loading reports...
+          </p>
+          <p className="text-sm text-gray-500 mt-2">Please wait a moment</p>
+        </div>
+      </div>
     );
-  }, [reports, searchTerm]);
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4 md:p-8">
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+      />
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">Report System</h1>
 
-        {/* Tabs */}
         <div className="mb-6">
           <div className="grid grid-cols-2 bg-white rounded-lg p-1 shadow-sm">
             <button
@@ -275,11 +302,9 @@ export default function ReportSystem() {
           </div>
         </div>
 
-        {/* Manage Reports Section */}
         {activeTab === "manage" && (
           <div>
             <h2 className="text-2xl font-bold mb-4">Manage Reports</h2>
-            {/* Search Input */}
             <div className="mb-4">
               <div className="relative">
                 <input
@@ -316,7 +341,7 @@ export default function ReportSystem() {
               >
                 <div className="flex-grow">
                   <div className="flex items-center space-x-2">
-                    {report.type === "red-flag" ? (
+                    {report.type === "RED_FLAG" ? (
                       <CircleAlert className="text-red-500 mr-2" />
                     ) : (
                       <FileText className="text-yellow-500 mr-2" />
@@ -326,13 +351,15 @@ export default function ReportSystem() {
                     </span>
                     <span
                       className={`px-2 py-1 rounded text-xs ${
-                        report.status === "pending"
+                        report.status === "PENDING"
                           ? "bg-blue-100 text-blue-800"
-                          : report.status === "under_investigation"
+                          : report.status === "UNDER_INVESTIGATION"
                           ? "bg-yellow-100 text-yellow-800"
-                          : report.status === "resolved"
+                          : report.status === "RESOLVED"
                           ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
+                          : report.status === "REJECTED"
+                          ? "bg-red-100 text-red-800"
+                          : "bg-gray-100 text-gray-800"
                       }`}
                     >
                       {report.status}
@@ -341,30 +368,33 @@ export default function ReportSystem() {
 
                   <h3 className="text-lg font-semibold mt-2">{report.title}</h3>
 
-                  {/* Date */}
                   <div className="flex items-center text-sm text-gray-600 mt-2">
                     <Calendar className="w-4 h-4 mr-2" />
                     {formatDate(report.incidentDate)}
                   </div>
 
-                  {/* Description */}
                   <div className="text-sm text-gray-600 mt-2 line-clamp-2">
                     {report.description}
                   </div>
 
-                  {/* Geolocation */}
-                  {report.latitude && report.longitude && (
-                    <div className="flex items-center text-sm text-gray-600 mt-2">
-                      <MapPin className="w-4 h-4 mr-2" />
-                      Lat: {report.latitude}, Lon: {report.longitude}
-                    </div>
-                  )}
+                  <div className="flex items-center text-sm text-gray-600 mt-2">
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Lat: {report.location.latitude}, Lon:{" "}
+                    {report.location.longitude}
+                  </div>
                 </div>
 
-                {/* Action Buttons */}
                 <div className="flex space-x-2 ml-4">
                   <button
-                    onClick={() => startEditingReport(report)}
+                    onClick={() => {
+                      setEditingReport(report);
+                      setFormData({
+                        ...report,
+                        latitude: report.location.latitude,
+                        longitude: report.location.longitude,
+                      });
+                      setIsEditModalOpen(true);
+                    }}
                     disabled={!canEditReport(report)}
                     className={`p-2 rounded border ${
                       canEditReport(report)
@@ -392,7 +422,6 @@ export default function ReportSystem() {
           </div>
         )}
 
-        {/* Create Report Section */}
         {activeTab === "create" && (
           <div className="bg-white rounded-lg shadow-sm p-6">
             <h2 className="text-xl font-bold mb-6">Create New Report</h2>
@@ -409,7 +438,6 @@ export default function ReportSystem() {
                   className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   required
                 >
-                  <option value="">Select a Record Type</option>
                   <option value="RED_FLAG">Red-flag Record</option>
                   <option value="INTERVENTION">Intervention Record</option>
                 </select>
@@ -428,7 +456,6 @@ export default function ReportSystem() {
                 />
               </div>
 
-              {/* Date Fields */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium mb-2">
@@ -472,28 +499,13 @@ export default function ReportSystem() {
                 />
               </div>
 
-              {/* Location Fields */}
               <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Location Description
-                  </label>
-                  <input
-                    type="text"
-                    name="location"
-                    value={formData.location}
-                    onChange={handleInputChange}
-                    className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    placeholder="Enter location details"
-                    required
-                  />
-                </div>
-
                 <div className="bg-gray-50 p-4 rounded-lg">
                   <div className="flex justify-between items-center mb-4">
                     <label className="block text-sm font-medium">
                       Geolocation
                     </label>
+                    <MapPin className="w-4 h-4 mr-2" />
                     <Button
                       type="button"
                       onClick={getCurrentLocation}
@@ -542,7 +554,7 @@ export default function ReportSystem() {
                 </div>
               </div>
 
-              <div>
+              {/* <div>
                 <label className="block text-sm font-medium mb-2">
                   Evidence Images
                 </label>
@@ -565,13 +577,13 @@ export default function ReportSystem() {
                     </p>
                   </div>
                 </div>
-              </div>
+              </div> */}
 
               <div className="flex justify-end space-x-4">
                 <button
                   type="button"
                   onClick={resetForm}
-                  className="px-4 py-2 border rounded-md  hover:bg-gray-50"
+                  className="px-4 py-2 border rounded-md hover:bg-gray-50"
                 >
                   Reset Form
                 </button>
@@ -581,7 +593,6 @@ export default function ReportSystem() {
           </div>
         )}
 
-        {/* Edit Modal */}
         {isEditModalOpen && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
             <div className="bg-white rounded-lg shadow-xl w-full max-w-lg">
@@ -598,7 +609,7 @@ export default function ReportSystem() {
                 </button>
               </div>
               <div className="p-4">
-                <form onSubmit={handleSubmit} className="space-y-3">
+                <form onSubmit={handleUpdate} className="space-y-3">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
                       Title
@@ -626,45 +637,6 @@ export default function ReportSystem() {
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Location
-                    </label>
-                    <input
-                      type="text"
-                      name="location"
-                      value={formData.location}
-                      onChange={handleInputChange}
-                      className="w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      required
-                    />
-                  </div>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Latitude
-                      </label>
-                      <input
-                        type="text"
-                        name="latitude"
-                        value={formData.latitude?.toString() || ""}
-                        onChange={handleInputChange}
-                        className="w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">
-                        Longitude
-                      </label>
-                      <input
-                        type="text"
-                        name="longitude"
-                        value={formData.longitude?.toString() || ""}
-                        onChange={handleInputChange}
-                        className="w-full px-2 py-1 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
                       Incident Date
                     </label>
                     <input
@@ -684,12 +656,7 @@ export default function ReportSystem() {
                     >
                       Cancel
                     </button>
-                    <Button
-                      type="submit"
-                      className="px-4 py-1 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2"
-                    >
-                      Update Report
-                    </Button>
+                    <Button type="submit">Update Report</Button>
                   </div>
                 </form>
               </div>

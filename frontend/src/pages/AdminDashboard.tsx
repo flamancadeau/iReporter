@@ -1,249 +1,232 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
-  AlertCircle,
-  CheckCircle,
   HourglassIcon,
   SearchIcon,
   XCircle,
-} from 'lucide-react';
-import {
-  PieChart,
-  Pie,
-  Cell,
-  Tooltip,
-  Legend,
-  ResponsiveContainer,
-} from 'recharts';
+  AlertCircle,
+  CheckCircle,
+} from "lucide-react";
+import axios from "axios";
+import { toast, ToastContainer } from 'react-toastify';
+import 'react-toastify/dist/ReactToastify.css';
 
-// Report interface
+type ReportStatus = "PENDING" | "UNDER_INVESTIGATION" | "REJECTED" | "RESOLVED";
+
 interface Report {
   id: number;
   title: string;
   description: string;
-  submittedAt: string;
-  status: 'Pending' | 'Under Investigation' | 'Rejected' | 'Resolved';
+  incidentDate: string;
+  status: ReportStatus;
 }
 
-// Status configuration for easy mapping
-const STATUS_CONFIG: Record<Report['status'], { icon: React.FC; color: string }> = {
-  Pending: {
-    icon: HourglassIcon,
-    color: 'bg-yellow-200 text-yellow-800 border-yellow-300',
-  },
-  'Under Investigation': {
-    icon: AlertCircle,
-    color: 'bg-blue-200 text-blue-800 border-blue-300',
-  },
-  Rejected: {
-    icon: XCircle,
-    color: 'bg-red-200 text-red-800 border-red-300',
-  },
-  Resolved: {
-    icon: CheckCircle,
-    color: 'bg-green-200 text-green-800 border-green-300',
-  },
+const statusOptions = [
+  { value: "PENDING", label: "Pending", color: "yellow" },
+  { value: "UNDER_INVESTIGATION", label: "Under Investigation", color: "blue" },
+  { value: "RESOLVED", label: "Resolved", color: "green" },
+  { value: "REJECTED", label: "Rejected", color: "red" },
+];
+
+const StatusIcon: Record<ReportStatus, React.ReactNode> = {
+  PENDING: <HourglassIcon className="w-6 h-6 text-yellow-500" />,
+  UNDER_INVESTIGATION: <AlertCircle className="w-6 h-6 text-blue-500" />,
+  RESOLVED: <CheckCircle className="w-6 h-6 text-green-500" />,
+  REJECTED: <XCircle className="w-6 h-6 text-red-500" />,
 };
 
-// Colors for pie charts
-const CHART_COLORS = {
-  Pending: '#FFC107',
-  'Under Investigation': '#007BFF',
-  Rejected: '#DC3545',
-  Resolved: '#28A745',
-};
+export default function AdminDashboard() {
+  const [reportsData, setReportsData] = useState<Report[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterStatus, setFilterStatus] = useState<ReportStatus | "All">("All");
 
-export default function Component() {
-  const [reports, setReports] = useState<Report[]>([]);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [filterStatus, setFilterStatus] = useState<Report['status'] | 'All'>('All');
-  const [error, setError] = useState("");
-
-  // useEffect(() => {
-    const fetchReports = async () => {
-      try {
-        const response = await fetch('http://localhost:3000/auth/reports');
-        if (!response.ok) {
-          throw new Error('Failed to fetch reports');
-        }
-        const data = await response.json();
-        setReports(data.reports);
-      } catch (error) {
-        console.error('Error fetching reports:', error);
-        setError(error);
-        // Handle error (e.g., show error message to user)
-      }
-    };
-
+  useEffect(() => {
     fetchReports();
-  // }, []);
+  }, []);
 
-  // const filteredReports = useMemo(() => {
-  //   return reports.filter((report) => {
-  //     const matchesSearch =
-  //       report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-  //       report.description.toLowerCase().includes(searchTerm.toLowerCase());
-  //     const matchesStatus =
-  //       filterStatus === 'All' || report.status === filterStatus;
-  //     return matchesSearch && matchesStatus;
-  //   });
-  // }, [reports, searchTerm, filterStatus]);
+  const fetchReports = async () => {
+    setLoading(true);
+    try {
+      const response = await axios.get<{ reports: Report[] }>(
+        "http://localhost:3000/reports"
+      );
+      setReportsData(response.data.reports);
+      setError(null);
+      // toast.success("Reports fetched successfully");
+    } catch (err) {
+      console.error("Error fetching reports:", err);
+      setError("Failed to fetch reports. Please try again later.");
+      toast.error("Failed to fetch reports. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  // const updateReportStatus = async (id: number, newStatus: Report['status']) => {
-  //   try {
-  //     const response = await fetch(`/auth/reports/${id}`, {
-  //       method: 'PATCH',
-  //       headers: {
-  //         'Content-Type': 'application/json',
-  //       },
-  //       body: JSON.stringify({ status: newStatus }),
-  //     });
+  const handleStatusChange = async (id: number, newStatus: ReportStatus) => {
+    try {
+      const response = await axios.put(`http://localhost:3000/report/${id}`, {
+        status: newStatus,
+      });
+      if (response.status === 200) {
+        setReportsData((prevReports) =>
+          prevReports.map((report) =>
+            report.id === id ? { ...report, status: newStatus } : report
+          )
+        );
+        toast.success("Status updated successfully");
+      }
+    } catch (error) {
+      console.error("Error updating report status:", error);
+      if (axios.isAxiosError(error) && error.response) {
+        toast.error(`Failed to update status: ${error.response.data.error || error.response.data.message}`);
+      } else {
+        toast.error("Failed to update status. Please try again.");
+      }
+    }
+  };
 
-  //     if (!response.ok) {
-  //       throw new Error('Failed to update report status');
-  //     }
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center p-8 bg-white rounded-lg shadow-lg">
+          <HourglassIcon className="w-12 h-12 animate-spin mx-auto mb-4 text-blue-500" />
+          <p className="text-lg font-medium text-gray-700">
+            Loading reports...
+          </p>
+          <p className="text-sm text-gray-500 mt-2">Please wait a moment</p>
+        </div>
+      </div>
+    );
+  }
 
-  //     setReports((currentReports) =>
-  //       currentReports.map((report) =>
-  //         report.id === id ? { ...report, status: newStatus } : report
-  //       )
-  //     );
-  //   } catch (error) {
-  //     console.error('Error updating report status:', error);
-  //     // Handle error (e.g., show error message to user)
-  //   }
-  // };
+  if (error) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <div className="text-center">
+          <XCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <p className="text-red-500">{error}</p>
+          <button
+            onClick={fetchReports}
+            className="mt-4 px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+          >
+            Try Again
+          </button>
+        </div>
+      </div>
+    );
+  }
 
-  // const statusCounts = useMemo(() => {
-  //   const counts: Record<Report['status'], number> = {
-  //     Pending: 0,
-  //     'Under Investigation': 0,
-  //     Rejected: 0,
-  //     Resolved: 0,
-  //   };
-  //   reports.forEach((report) => {
-  //     counts[report.status]++;
-  //   });
-  //   return counts;
-  // }, [reports]);
+  const filteredReports = reportsData.filter((report) => {
+    const matchesSearch =
+      report.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.description.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus =
+      filterStatus === "All" || report.status === filterStatus;
+    return matchesSearch && matchesStatus;
+  });
 
-  // const chartData = Object.keys(statusCounts).map((status) => ({
-  //   name: status as Report['status'],
-  //   value: statusCounts[status as Report['status']],
-  // }));
+  const getStatusColor = (status: ReportStatus) => {
+    const statusOption = statusOptions.find(
+      (option) => option.value === status
+    );
+    return statusOption ? statusOption.color : "gray";
+  };
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
+      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
       <div className="container mx-auto">
         <header className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-800 mb-4">Admin Dashboard</h1>
-          <div className="flex space-x-4 mb-6">
+          <h1 className="text-3xl font-bold text-gray-800 mb-4">
+            Reports Dashboard
+          </h1>
+          <div className="flex space-x-4">
             <div className="flex-grow relative">
               <input
                 type="text"
                 placeholder="Search reports..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full p-3 pl-10 border rounded-lg focus:ring-2 focus:ring-blue-500"
+                className="w-full p-3 pl-10 border rounded-lg"
               />
               <SearchIcon className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" />
             </div>
             <select
               value={filterStatus}
               onChange={(e) =>
-                setFilterStatus(e.target.value as Report['status'] | 'All')
+                setFilterStatus(e.target.value as ReportStatus | "All")
               }
               className="border rounded-lg p-3"
             >
-              <option value="All">All Statuses</option>
-              {Object.keys(STATUS_CONFIG).map((status) => (
-                <option key={status} value={status}>
-                  {status}
+              <option value="All">All Status</option>
+              {statusOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
                 </option>
               ))}
             </select>
           </div>
         </header>
 
-        {/* Individual Pie Charts for Each Status */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-bold mb-4">Report Status Overview</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {Object.keys(STATUS_CONFIG).map((status) => {
-              // const statusCount = statusCounts[status as Report['status']];
-              return (
-                <div key={status} className="bg-white shadow-md rounded-lg p-4">
-                  <h3 className="text-xl font-semibold mb-2">{status}</h3>
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={[{ name: status, value: 2 }]}  // todo: statusCount
-                        dataKey="value"
-                        nameKey="name"
-                        outerRadius={80}
-                        fill={CHART_COLORS[status as Report['status']]}
-                        label
-                      >
-                        <Cell fill={CHART_COLORS[status as Report['status']]} />
-                      </Pie>
-                      <Tooltip />
-                      <Legend />
-                    </PieChart>
-                  </ResponsiveContainer>
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        {/* Reports Grid */}
-        <div className="grid md:grid-cols-1 gap-4">
-          {reports.map((report) => {
-            const StatusIcon = STATUS_CONFIG[report.status].icon;
-            const statusStyle = STATUS_CONFIG[report.status].color;
-            return (
+        <div className="grid gap-4">
+          {filteredReports.length === 0 ? (
+            <div className="text-center text-gray-500">
+              <p>No reports found matching your criteria.</p>
+            </div>
+          ) : (
+            filteredReports.map((report) => (
               <div
                 key={report.id}
-                className={`bg-white shadow-md rounded-lg p-6 flex items-center justify-between hover:shadow-lg transition-shadow border-l-4 ${statusStyle.split(' ')[2]}`}
+                className={`bg-white shadow-md rounded-lg p-6 flex items-center justify-between hover:shadow-lg transition-shadow border-l-4 border-${getStatusColor(
+                  report.status
+                )}-500`}
               >
                 <div className="flex-grow mr-4">
                   <div className="flex items-center mb-2">
-                    <StatusIcon className={`mr-2 ${statusStyle.split(' ')[1]}`} />
+                    <span className="text-xl text-gray-700 mr-2">
+                      {StatusIcon[report.status]}
+                    </span>
                     <h2 className="text-xl font-semibold text-gray-800">
                       {report.title}
                     </h2>
                   </div>
-                  <p className="text-gray-600 mb-2">{report.description}</p>
-                  <div className="text-sm text-gray-500">
-                    Submitted: {report.submittedAt}
+                  <div
+                    className={`p-4 rounded-lg mb-4 bg-${getStatusColor(
+                      report.status
+                    )}-100 border-${getStatusColor(report.status)}-300 border`}
+                  >
+                    <p className="text-gray-600 mb-2">{report.description}</p>
+                    <div className="text-sm text-gray-500">
+                      Incident Date:{" "}
+                      <span className="font-bold">
+                        {new Date(report.incidentDate).toLocaleDateString()}
+                      </span>
+                    </div>
                   </div>
                 </div>
-                {/* Status Change Dropdown */}
-                <select
-                  value={report.status}
-                  // onChange={(e) =>
-                  //   updateReportStatus(report.id, e.target.value as Report['status'])
-                  // }
-                  className={`border rounded px-3 py-2 ${statusStyle}`}
-                >
-                  {Object.keys(STATUS_CONFIG).map((status) => (
-                    <option key={status} value={status}>
-                      {status}
-                    </option>
-                  ))}
-                </select>
+                <div className="flex items-center">
+                  <select
+                    value={report.status}
+                    onChange={(e) => {
+                      const newStatus = e.target.value as ReportStatus;
+                      handleStatusChange(report.id, newStatus);
+                    }}
+                    className={`border rounded px-3 py-2 text-${getStatusColor(
+                      report.status
+                    )}-500 border-${getStatusColor(report.status)}-500`}
+                  >
+                    {statusOptions.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
               </div>
-            );
-          })}
+            ))
+          )}
         </div>
-
-        <h1>{error}</h1>
-
-        {/* No Results Handling */}
-        {/* {filteredReports.length === 0 && (
-          <div className="text-center py-10 text-gray-500">
-            No reports found matching your search or filter.
-          </div>
-        )} */}
       </div>
     </div>
   );

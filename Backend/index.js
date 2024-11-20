@@ -4,7 +4,8 @@ const { PrismaClient } = require("@prisma/client");
 const cors = require("cors");
 const app = express();
 const prisma = new PrismaClient();
-
+// const { schema } = require("./src/modals/Report");
+// const mongoose = require("mongoose");
 // help to connected URl from frontend
 app.use(
   cors({
@@ -36,11 +37,12 @@ app.get("/", (req, res) => {
 
 // routes
 const authRoutes = require("./src/routes/auth");
+const reportRoutes = require("./src/routes/reports");
+
 app.use("/auth", authRoutes);
+app.use("", reportRoutes);
 
 
-
-// Start the server
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
