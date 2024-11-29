@@ -82,12 +82,10 @@ router.get("/report/:userId", async (req, res) => {
     res.status(200).json({ reports: userReports });
   } catch (error) {
     console.error("Error fetching user's reports:", error);
-    res
-      .status(500)
-      .json({
-        message: "Failed to fetch reports for the user",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Failed to fetch reports for the user",
+      error: error.message,
+    });
   }
 });
 
@@ -108,8 +106,8 @@ router.delete("/report/:id", async (req, res) => {
 });
 
 router.patch("/report/:id", async (req, res) => {
-  const { id } = req.params; // Assuming the ID is a string or number
-  const { title, description, incidentDate } = req.body;
+  const { id } = req.params;
+  const { title, description, incidentDate, latitude, longitude } = req.body;
 
   try {
     // Validate the ID
@@ -126,13 +124,43 @@ router.patch("/report/:id", async (req, res) => {
     // Convert incidentDate to a proper Date object if it's provided
     if (incidentDate) {
       const parsedDate = new Date(incidentDate);
-      // Check if the parsedDate is a valid date
       if (isNaN(parsedDate)) {
         return res
           .status(400)
           .json({ message: "Invalid date format for incidentDate" });
       }
       updateData.incidentDate = parsedDate;
+    }
+
+    // Validate and update location if latitude and longitude are provided
+    if (latitude !== undefined && longitude !== undefined) {
+      const parsedLatitude = parseFloat(latitude);
+      const parsedLongitude = parseFloat(longitude);
+
+      if (
+        isNaN(parsedLatitude) ||
+        parsedLatitude < -90 ||
+        parsedLatitude > 90
+      ) {
+        return res
+          .status(400)
+          .json({ message: "Invalid latitude. Must be between -90 and 90." });
+      }
+
+      if (
+        isNaN(parsedLongitude) ||
+        parsedLongitude < -180 ||
+        parsedLongitude > 180
+      ) {
+        return res.status(400).json({
+          message: "Invalid longitude. Must be between -180 and 180.",
+        });
+      }
+
+      updateData.location = {
+        latitude: parsedLatitude,
+        longitude: parsedLongitude,
+      };
     }
 
     // Check if there's anything to update
@@ -142,7 +170,7 @@ router.patch("/report/:id", async (req, res) => {
 
     // Check if the report exists before updating
     const existingReport = await prisma.report.findUnique({
-      where: { id: id }, // Ensure id is correct type for your DB
+      where: { id: id },
     });
 
     if (!existingReport) {
@@ -151,7 +179,7 @@ router.patch("/report/:id", async (req, res) => {
 
     // Update the report in the database
     const updatedReport = await prisma.report.update({
-      where: { id: id }, // Assuming id is a string, ensure this matches your DB schema
+      where: { id: id },
       data: updateData,
     });
 
@@ -161,7 +189,6 @@ router.patch("/report/:id", async (req, res) => {
   } catch (error) {
     console.error("Error updating report:", error);
 
-    // Handle any errors that might occur
     if (error.code === "P2002") {
       return res
         .status(400)
@@ -222,12 +249,10 @@ router.put("/report/:id", async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating report status:", error);
-    res
-      .status(500)
-      .json({
-        message: "Failed to update report status",
-        error: error.message,
-      });
+    res.status(500).json({
+      message: "Failed to update report status",
+      error: error.message,
+    });
   }
 });
 

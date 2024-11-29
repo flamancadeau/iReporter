@@ -56,6 +56,8 @@ export default function ReportSystem() {
   const [isLoadingLocation, setIsLoadingLocation] = useState(false);
   const [locationError, setLocationError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [reportToDelete, setReportToDelete] = useState<Report | null>(null);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -90,13 +92,22 @@ export default function ReportSystem() {
     return report.status === "PENDING" || report.status === "draft";
   };
 
-  const handleDeleteReport = async (id: string) => {
+  const handleDeleteReport = (report: Report) => {
+    setReportToDelete(report);
+    setIsDeleteConfirmOpen(true);
+  };
+
+  const confirmDelete = async () => {
+    if (!reportToDelete) return;
+
     try {
-      const response = await axios.delete(`http://localhost:3000/report/${id}`);
+      const response = await axios.delete(
+        `http://localhost:3000/report/${reportToDelete.id}`
+      );
 
       if (response.status === 200) {
         setReports((prevReports) =>
-          prevReports.filter((report) => report.id !== id)
+          prevReports.filter((report) => report.id !== reportToDelete.id)
         );
         toast.success("Report deleted successfully");
       } else {
@@ -105,6 +116,9 @@ export default function ReportSystem() {
     } catch (error) {
       console.error("Error deleting report:", error);
       toast.error("Failed to delete report. Please try again.");
+    } finally {
+      setIsDeleteConfirmOpen(false);
+      setReportToDelete(null);
     }
   };
 
@@ -137,11 +151,15 @@ export default function ReportSystem() {
       } else {
         throw new Error("Failed to update report");
       }
-    } catch (error: any) {
-      console.error("Error updating report:", error);
-      const errorMessage =
-        error.response?.data?.message || "Failed to update report";
-      toast.error(errorMessage);
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        const errorMessage =
+          error.response?.data?.message || "Failed to update report";
+        toast.error(errorMessage);
+      } else {
+        console.error("Unexpected error:", error);
+        toast.error("An unexpected error occurred");
+      }
     }
   };
 
@@ -202,7 +220,7 @@ export default function ReportSystem() {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const getCurrentLocation = () => {
+  const handleGeolocationUpdate = () => {
     setIsLoadingLocation(true);
     setLocationError("");
 
@@ -215,17 +233,17 @@ export default function ReportSystem() {
             longitude: position.coords.longitude,
           }));
           setIsLoadingLocation(false);
-          toast.success("Location fetched successfully");
+          toast.success("Location updated successfully");
         },
         (error) => {
           setLocationError(
-            "Failed to get location. Please ensure location services are enabled."
+            "Failed to update location. Please ensure location services are enabled."
           );
           setIsLoadingLocation(false);
           console.error("Geolocation error:", error);
-          toast.error("Failed to get location. Please try again.");
+          toast.error("Failed to update location. Please try again.");
         },
-        { enableHighAccuracy: true }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }
       );
     } else {
       setLocationError("Geolocation is not supported by your browser");
@@ -406,7 +424,7 @@ export default function ReportSystem() {
                   </button>
 
                   <button
-                    onClick={() => handleDeleteReport(report.id)}
+                    onClick={() => handleDeleteReport(report)}
                     disabled={!canEditReport(report)}
                     className={`p-2 rounded border ${
                       canEditReport(report)
@@ -428,10 +446,14 @@ export default function ReportSystem() {
 
             <form onSubmit={handleSubmit} className="space-y-6">
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="report-type"
+                  className="block text-sm font-medium mb-2"
+                >
                   Report Type
                 </label>
                 <select
+                  id="report-type"
                   name="type"
                   value={formData.type}
                   onChange={handleInputChange}
@@ -444,9 +466,15 @@ export default function ReportSystem() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">Title</label>
+                <label
+                  htmlFor="report-title"
+                  className="block text-sm font-medium mb-2"
+                >
+                  Title
+                </label>
                 <input
                   type="text"
+                  id="report-title"
                   name="title"
                   value={formData.title}
                   onChange={handleInputChange}
@@ -458,11 +486,15 @@ export default function ReportSystem() {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label
+                    htmlFor="incident-date"
+                    className="block text-sm font-medium mb-2"
+                  >
                     Date of Incident
                   </label>
                   <input
                     type="date"
+                    id="incident-date"
                     name="incidentDate"
                     value={formData.incidentDate}
                     onChange={handleInputChange}
@@ -472,11 +504,15 @@ export default function ReportSystem() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-2">
+                  <label
+                    htmlFor="report-date"
+                    className="block text-sm font-medium mb-2"
+                  >
                     Report Date
                   </label>
                   <input
                     type="date"
+                    id="report-date"
                     name="reportDate"
                     value={formData.reportDate}
                     className="w-full px-4 py-2 border rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-gray-50"
@@ -486,10 +522,14 @@ export default function ReportSystem() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium mb-2">
+                <label
+                  htmlFor="report-description"
+                  className="block text-sm font-medium mb-2"
+                >
                   Detailed Description
                 </label>
                 <textarea
+                  id="report-description"
                   name="description"
                   value={formData.description}
                   onChange={handleInputChange}
@@ -506,15 +546,20 @@ export default function ReportSystem() {
                       Geolocation
                     </label>
                     <MapPin className="w-4 h-4 mr-2" />
-                    <Button
+                    <button
                       type="button"
-                      onClick={getCurrentLocation}
+                      onClick={handleGeolocationUpdate}
                       disabled={isLoadingLocation}
+                      className={`btn px-4 py-2 rounded ${
+                        isLoadingLocation
+                          ? "bg-gray-400 cursor-not-allowed"
+                          : "bg-black hover:bg-black text-white"
+                      }`}
                     >
                       {isLoadingLocation
-                        ? "Getting Location..."
-                        : "Get Current Location"}
-                    </Button>
+                        ? "Updating Location..."
+                        : "Getting Location"}
+                    </button>
                   </div>
 
                   {locationError && (
@@ -525,11 +570,15 @@ export default function ReportSystem() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <label
+                        htmlFor="latitude"
+                        className="block text-sm font-medium mb-2"
+                      >
                         Latitude
                       </label>
                       <input
                         type="text"
+                        id="latitude"
                         name="latitude"
                         value={formData.latitude?.toString() || ""}
                         onChange={handleInputChange}
@@ -538,11 +587,15 @@ export default function ReportSystem() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-2">
+                      <label
+                        htmlFor="longitude"
+                        className="block text-sm font-medium mb-2"
+                      >
                         Longitude
                       </label>
                       <input
                         type="text"
+                        id="longitude"
                         name="longitude"
                         value={formData.longitude?.toString() || ""}
                         onChange={handleInputChange}
@@ -553,31 +606,6 @@ export default function ReportSystem() {
                   </div>
                 </div>
               </div>
-
-              {/* <div>
-                <label className="block text-sm font-medium mb-2">
-                  Evidence Images
-                </label>
-                <div className="mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed border-gray-300 rounded-md hover:border-blue-400">
-                  <div className="space-y-1 text-center">
-                    <div className="flex text-sm text-gray-600">
-                      <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500">
-                        <span>Upload files</span>
-                        <input
-                          type="file"
-                          className="sr-only"
-                          multiple
-                          accept="image/*"
-                        />
-                      </label>
-                      <p className="pl-1">or drag and drop</p>
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      PNG, JPG up to 10MB each
-                    </p>
-                  </div>
-                </div>
-              </div> */}
 
               <div className="flex justify-end space-x-4">
                 <button
@@ -648,6 +676,61 @@ export default function ReportSystem() {
                       required
                     />
                   </div>
+
+                  <div className="space-y-4">
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <div className="flex justify-between items-center mb-4">
+                        <label className="block text-sm font-medium">
+                          Geolocation
+                        </label>
+                        <MapPin className="w-4 h-4 mr-2" />
+                      </div>
+
+                      {locationError && (
+                        <div className="text-red-600 text-sm mb-4">
+                          {locationError}
+                        </div>
+                      )}
+
+                      <div className="grid grid-cols-2 gap-4">
+                        <div>
+                          <label
+                            htmlFor="latitude"
+                            className="block text-sm font-medium mb-2"
+                          >
+                            Latitude
+                          </label>
+                          <input
+                            type="text"
+                            id="latitude"
+                            name="latitude"
+                            value={formData.latitude}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-2 border rounded-md focus:ring-2 "
+                            placeholder="e.g., 51.5074"
+                          />
+                        </div>
+                        <div>
+                          <label
+                            htmlFor="longitude"
+                            className="block text-sm font-medium mb-2"
+                          >
+                            Longitude
+                          </label>
+                          <input
+                            type="text"
+                            id="longitude"
+                            name="longitude"
+                            value={formData.longitude}
+                            onChange={handleInputChange}
+                            className="w-full px-4 py-2 border rounded-md focus:ring-2 "
+                            placeholder="e.g., -0.1278"
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex justify-end space-x-2">
                     <button
                       type="button"
@@ -656,9 +739,41 @@ export default function ReportSystem() {
                     >
                       Cancel
                     </button>
-                    <Button type="submit">Update Report</Button>
+                    <Button type="submit">Update</Button>
                   </div>
                 </form>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {isDeleteConfirmOpen && reportToDelete && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md p-6">
+              <h2 className="text-lg font-semibold mb-4">
+                Delete Confirmation
+              </h2>
+
+              <p className="text-gray-600 mb-6">
+                Are you certain you want to proceed with deleting the report:{" "}
+                <span className="font-bold text-red-600">
+                  {reportToDelete.title}
+                </span>
+                ? This operation is irreversible and will permanently remove the
+                report from the system.
+              </p>
+
+              <div className="flex justify-end space-x-4">
+                <button
+                  onClick={() => {
+                    setIsDeleteConfirmOpen(false);
+                    setReportToDelete(null);
+                  }}
+                  className="px-4 py-2 border rounded-md hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <Button onClick={confirmDelete}>Delete</Button>
               </div>
             </div>
           </div>

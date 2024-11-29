@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import Button from "./components/Button";
+
 import { Link, useNavigate } from "react-router-dom";
 
 export default function Login() {
@@ -9,7 +9,7 @@ export default function Login() {
   const [success, setSuccess] = useState(""); // State for success message
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
-  const userId = localStorage.getItem('userId');
+  const userId = localStorage.getItem("userId");
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     setError("");
@@ -109,9 +109,13 @@ export default function Login() {
               />
             </div>
             <div>
-              <Button type="submit" className="w-full" disabled={isLoading}>
+              <button
+                className="bg-black text-teal-50 w-full px-6 py-3 text-lg rounded-lg shadow-lg hover:bg-gray-800 focus:ring-4 focus:ring-teal-300 focus:outline-none disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-300"
+                type="submit"
+                disabled={isLoading}
+              >
                 {isLoading ? "Signing in..." : "Sign In"}
-              </Button>
+              </button>
             </div>
           </form>
         </div>
