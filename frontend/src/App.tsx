@@ -1,9 +1,5 @@
-import {
-  BrowserRouter as Router,
-  Route,
-  Routes,
-  Navigate,
-} from "react-router-dom";
+import React from "react";
+import { BrowserRouter as Router, Routes, Route, Navigate } from "react-router-dom";
 
 import Register from "./pages/Register";
 import Login from "./pages/Login";
@@ -11,12 +7,16 @@ import ReportCreationPage from "./pages/ReportCreationPage";
 import AdminDashboard from "./pages/AdminDashboard";
 
 // Protected Route Component
-const ProtectedRoute = ({ children }) => {
+interface ProtectedRouteProps {
+  children: React.ReactNode;
+}
+
+const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
   const token = localStorage.getItem("token");
   if (!token) {
     return <Navigate to="/login" replace />;
   }
-  return children;
+  return <>{children}</>;
 };
 
 function App() {
@@ -34,7 +34,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         {/* Redirect root to login */}
         <Route path="/" element={<Navigate to="/login" replace />} />
         <Route path="*" element={<h1>Not found</h1>} />

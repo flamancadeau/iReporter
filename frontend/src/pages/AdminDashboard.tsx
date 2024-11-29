@@ -7,8 +7,16 @@ import {
   CheckCircle,
 } from "lucide-react";
 import axios from "axios";
-import { toast, ToastContainer } from 'react-toastify';
-import 'react-toastify/dist/ReactToastify.css';
+import { toast, ToastContainer } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
+import {
+  PieChart,
+  Pie,
+  ResponsiveContainer,
+  Cell,
+  Tooltip,
+  Legend,
+} from "recharts";
 
 type ReportStatus = "PENDING" | "UNDER_INVESTIGATION" | "REJECTED" | "RESOLVED";
 
@@ -18,6 +26,7 @@ interface Report {
   description: string;
   incidentDate: string;
   status: ReportStatus;
+  type: string;
 }
 
 const statusOptions = [
@@ -53,7 +62,6 @@ export default function AdminDashboard() {
       );
       setReportsData(response.data.reports);
       setError(null);
-      // toast.success("Reports fetched successfully");
     } catch (err) {
       console.error("Error fetching reports:", err);
       setError("Failed to fetch reports. Please try again later.");
@@ -79,11 +87,35 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error("Error updating report status:", error);
       if (axios.isAxiosError(error) && error.response) {
-        toast.error(`Failed to update status: ${error.response.data.error || error.response.data.message}`);
+        toast.error(
+          `Failed to update status: ${
+            error.response.data.error || error.response.data.message
+          }`
+        );
       } else {
         toast.error("Failed to update status. Please try again.");
       }
     }
+  };
+
+  const getStatusColor = (status: ReportStatus) => {
+    const statusOption = statusOptions.find(
+      (option) => option.value === status
+    );
+    return statusOption ? statusOption.color : "gray";
+  };
+
+  const prepareChartData = () => {
+    const statusCounts = reportsData.reduce((acc, report) => {
+      acc[report.status] = (acc[report.status] || 0) + 1;
+      return acc;
+    }, {} as Record<ReportStatus, number>);
+
+    return statusOptions.map((status) => ({
+      name: status.label,
+      value: statusCounts[status.value as ReportStatus] || 0,
+      color: status.color,
+    }));
   };
 
   if (loading) {
@@ -126,16 +158,15 @@ export default function AdminDashboard() {
     return matchesSearch && matchesStatus;
   });
 
-  const getStatusColor = (status: ReportStatus) => {
-    const statusOption = statusOptions.find(
-      (option) => option.value === status
-    );
-    return statusOption ? statusOption.color : "gray";
-  };
+  const chartData = prepareChartData();
 
   return (
     <div className="min-h-screen bg-gray-50 p-6">
-      <ToastContainer position="top-right" autoClose={3000} hideProgressBar={false} />
+      <ToastContainer
+        position="top-right"
+        autoClose={3000}
+        hideProgressBar={false}
+      />
       <div className="container mx-auto">
         <header className="mb-8">
           <h1 className="text-3xl font-bold text-gray-800 mb-4">
@@ -169,6 +200,31 @@ export default function AdminDashboard() {
           </div>
         </header>
 
+        <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+          <h2 className="text-xl font-bold mb-4">Report Status Distribution</h2>
+          <div className="h-[300px]">
+            <ResponsiveContainer width="100%" height="100%">
+              <PieChart>
+                <Pie
+                  data={chartData}
+                  dataKey="value"
+                  nameKey="name"
+                  cx="50%"
+                  cy="50%"
+                  outerRadius={100}
+                  label
+                >
+                  {chartData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </PieChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
         <div className="grid gap-4">
           {filteredReports.length === 0 ? (
             <div className="text-center text-gray-500">
@@ -183,6 +239,9 @@ export default function AdminDashboard() {
                 )}-500`}
               >
                 <div className="flex-grow mr-4">
+                  <span className="text-sm text-gray-700 mr-2">
+                    {report.type}
+                  </span>
                   <div className="flex items-center mb-2">
                     <span className="text-xl text-gray-700 mr-2">
                       {StatusIcon[report.status]}
